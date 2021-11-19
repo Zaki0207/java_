@@ -346,6 +346,7 @@ public class Main {
                     byte[] buf = new byte[1024];
                     DatagramPacket recv_msg = new DatagramPacket(buf, buf.length);
                     socket.receive(recv_msg);
+
                     if(recv_msg.getAddress().getHostAddress().equals(receive_guide_ip)){
                         byte[] datas = recv_msg.getData();
                         byte[] temp_data_1 = new byte[8];
