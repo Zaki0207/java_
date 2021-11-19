@@ -276,7 +276,12 @@ public class Main {
         if ((Math.abs(js.acc_And_dcc) > 0.02) && (Math.abs(js.angle_offset) > 0.02)){  // 有杆信号
             temp_acc = js.acc_And_dcc * acc;
             temp_anglecc = js.angle_offset * angle_velocity;
-            new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
+            if(cur_POSI.speed + temp_acc * delta_t >= 0){
+                new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
+            }
+            else{
+                new_POSI.speed = 0;
+            }
             new_POSI.heading = cur_POSI.heading + temp_anglecc * delta_t;
             new_POSI.height = cur_POSI.height;
             temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
@@ -330,7 +335,7 @@ public class Main {
                 }
             }
         }
-//        System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
+        System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
         return new_POSI;
     }
 
@@ -346,7 +351,7 @@ public class Main {
                     byte[] buf = new byte[1024];
                     DatagramPacket recv_msg = new DatagramPacket(buf, buf.length);
                     socket.receive(recv_msg);
-
+                    System.out.println("Received gui signal from ip: " + recv_msg.getAddress().getHostAddress());
                     if(recv_msg.getAddress().getHostAddress().equals(receive_guide_ip)){
                         byte[] datas = recv_msg.getData();
                         byte[] temp_data_1 = new byte[8];
@@ -385,6 +390,7 @@ public class Main {
                     byte[] buf = new byte[1024];
                     DatagramPacket recv_msg = new DatagramPacket(buf, buf.length);
                     socket.receive(recv_msg);
+//                    System.out.println("Received joystick signal from ip: " + recv_msg.getAddress().getHostAddress());
                     if(recv_msg.getAddress().getHostAddress().equals(receive_joystick_ip)){
                         byte[] datas = recv_msg.getData();
                         byte[] temp_data_1 = new byte[8];
@@ -437,9 +443,9 @@ public class Main {
         new_posi.heading = cur_posi.heading;
         while (true){
             new_posi = getPOSI(new_posi, rgt.guidsignal, rjt.joysticksignal);
-            Thread.sleep(delta_t.longValue() * 1000);
-            System.out.println(new_posi.longti + " " + new_posi.lat + " " +new_posi.height + " " +
-                    new_posi.speed + " " + new_posi.heading + " ");
+            Thread.sleep((long) (delta_t * 1000));
+//            System.out.println(new_posi.longti + " " + new_posi.lat + " " +new_posi.height + " " +
+//                    new_posi.speed + " " + new_posi.heading + " ");
             sendPOSI(new_posi);
         }
     }

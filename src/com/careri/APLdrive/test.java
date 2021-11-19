@@ -2,11 +2,10 @@ package com.careri.APLdrive;
 
 public class test {
     public static void main(String[] args) {
-        double x = 155.399;
-        double y;
-        y = calc(x);
-        System.out.println(x);
-        System.out.println(y);
+        double delta_t = 0.02;
+        long a = (long) (delta_t * 1000);
+        a = a + 1;
+
 
     }
     public static double calc(double x){
