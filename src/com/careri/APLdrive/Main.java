@@ -280,8 +280,8 @@ public class Main {
             new_POSI.heading = cur_POSI.heading + temp_anglecc * delta_t;
             new_POSI.height = cur_POSI.height;
             temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-            temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading);
-            temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading);
+            temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
+            temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
             temp_new_POSI.z = temp_cur_POSI.z;
             temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
             new_POSI.lat = temp_POSI_WGS.lat;
@@ -302,8 +302,8 @@ public class Main {
                 }
                 new_POSI.height = cur_POSI.height;
                 temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-                temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading);
-                temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading);
+                temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
+                temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
                 temp_new_POSI.z = temp_cur_POSI.z;
                 temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
                 new_POSI.lat = temp_POSI_WGS.lat;
@@ -321,8 +321,8 @@ public class Main {
                 }
                 else{
                     temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-                    temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading);
-                    temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading);
+                    temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
+                    temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
                     temp_new_POSI.z = temp_cur_POSI.z;
                     temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
                     new_POSI.lat = temp_POSI_WGS.lat;
@@ -330,7 +330,7 @@ public class Main {
                 }
             }
         }
-        System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
+//        System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
         return new_POSI;
     }
 
