@@ -273,7 +273,7 @@ public class Main {
         Position temp_new_POSI = new Position();
         Postion_WGS temp_POSI_WGS = new Postion_WGS();
         APLposition new_POSI = new APLposition();
-        if ((Math.abs(js.acc_And_dcc) > 0.02) && (Math.abs(js.angle_offset) > 0.02)){  // 有杆信号
+        if ((Math.abs(js.acc_And_dcc) > 0.02) || (Math.abs(js.angle_offset) > 0.02)){  // 有杆信号
             temp_acc = js.acc_And_dcc * acc;
             temp_anglecc = js.angle_offset * angle_velocity;
             if(cur_POSI.speed + temp_acc * delta_t >= 0){
@@ -296,15 +296,32 @@ public class Main {
             if ((gs.target_angle >= 0) && (gs.target_speed >= 0)){ // 有指引信号，先判断是否达到指引状态
                 temp_acc = acc;
                 temp_anglecc = angle_velocity;
-                if ((Math.abs(cur_POSI.heading - gs.target_angle) < (delta_t * angle_velocity))  // 达到指引状态
-                        && (Math.abs(cur_POSI.speed - gs.target_speed) < (delta_t * acc))){
+                // 分别判断速度和航向是否达到指引状态
+                if(Math.abs(cur_POSI.speed - gs.target_speed) < (delta_t * acc)){
                     new_POSI.speed = cur_POSI.speed;
+                }
+                else{
+                    if(cur_POSI.speed - gs.target_speed > 0){ // 需要减速
+                        if(cur_POSI.speed - temp_acc * delta_t >= 0){
+                            new_POSI.speed = cur_POSI.speed - temp_acc * delta_t;
+                        }
+                        else{
+                            new_POSI.speed = 0;
+                        }
+                    }
+                    else{
+                        new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
+                    }
+
+                }
+
+                if(Math.abs(cur_POSI.heading - gs.target_angle) < (delta_t * angle_velocity)) {
                     new_POSI.heading = cur_POSI.heading;
                 }
-                else{ // 尚未达到指引状态
-                    new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
+                else{
                     new_POSI.heading = turnCalc(cur_POSI.heading, gs.target_angle, temp_anglecc * delta_t);
                 }
+
                 new_POSI.height = cur_POSI.height;
                 temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
                 temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
