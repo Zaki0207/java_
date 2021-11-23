@@ -22,6 +22,8 @@ public class Main {
     private static Double initial_head;
     private static String receive_joystick_ip;
     private static int receive_joystick_port ;
+    private static String receive_cmd_ip;
+    private static int receive_cmd_port ;
     private static final double Earth_LongAxis = 6378137;
     private static final double Earth_ShortAxis = 6356752.3142;
     private static final double Ownpoint_lon = 121.81618;
@@ -46,6 +48,8 @@ public class Main {
         initial_head = Double.valueOf(prop.getProperty("initial_head"));
         receive_joystick_port  = Integer.parseInt(prop.getProperty("receive_joystick_port"));
         receive_joystick_ip  = prop.getProperty("receive_joystick_ip");
+        receive_cmd_port  = Integer.parseInt(prop.getProperty("receive_cmd_port"));
+        receive_cmd_ip  = prop.getProperty("receive_cmd_ip");
         in.close();
     }
 
@@ -55,6 +59,21 @@ public class Main {
             value |= ((long) (arr[i] & 0xff)) << (8 * i);
         }
         return Double.longBitsToDouble(value);
+    }
+
+    // byte[]转int
+    private static int byteArrayToInt(byte[] bytes) {
+        int value = 0;
+        // 大端：高位到低位，中转为小端
+        byte[] temp = new byte[4];
+        for (int i = 0; i < 4; i++){
+            temp[i] = bytes[3-i];
+        }
+        for (int i = 0; i < 4; i++) {
+            int shift = (4 - 1 - i) * 8;
+            value += (temp[i] & 0x000000FF) << shift;//往高位游
+        }
+        return value;
     }
 
     public static Position WGS_to_ECEF(double lon, double lat, double h){
@@ -258,8 +277,9 @@ public class Main {
     }
 
 
-    public static APLposition getPOSI(APLposition cur_POSI, GuidSignal gs, Joystick js){
+    public static APLposition getPOSI(APLposition cur_POSI, GuidSignal gs, Joystick js, Command cs){
         /*
+        add: 先判断是否收到cmd
         * 1. 先判断是否收到杆信号，0.02以内认为无信号
         * 2. 根据杆信号，得到当前加速度和转向率,有杆信号就优先按照杆信号运动
         * 3. 根据指引信号，无信号则按当前状态，有信号则先判断当前是否达到指引状态，然后再判断是否进行转向和加减速
@@ -267,44 +287,23 @@ public class Main {
         * 5. UDP发送
         * 6. 睡眠20ms
         * */
-        double temp_acc;
-        double temp_anglecc;
+        double temp_acc = 0;
+        double temp_anglecc = 0;
         Position temp_cur_POSI;
         Position temp_new_POSI = new Position();
         Postion_WGS temp_POSI_WGS = new Postion_WGS();
         APLposition new_POSI = new APLposition();
-        if ((Math.abs(js.acc_And_dcc) > 0.02) && (Math.abs(js.angle_offset) > 0.02)){  // 有杆信号
-            temp_acc = js.acc_And_dcc * acc;
-            temp_anglecc = js.angle_offset * angle_velocity;
-            if(cur_POSI.speed + temp_acc * delta_t >= 0){
-                new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
-            }
-            else{
-                new_POSI.speed = 0;
-            }
-            new_POSI.heading = cur_POSI.heading + temp_anglecc * delta_t;
-            new_POSI.height = cur_POSI.height;
-            temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-            temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
-            temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
-            temp_new_POSI.z = temp_cur_POSI.z;
-            temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-            new_POSI.lat = temp_POSI_WGS.lat;
-            new_POSI.longti = temp_POSI_WGS.lon;
-        }
-        else{  // 无杆信号
-            if ((gs.target_angle >= 0) && (gs.target_speed >= 0)){ // 有指引信号，先判断是否达到指引状态
-                temp_acc = acc;
-                temp_anglecc = angle_velocity;
-                if ((Math.abs(cur_POSI.heading - gs.target_angle) < (delta_t * angle_velocity))  // 达到指引状态
-                        && (Math.abs(cur_POSI.speed - gs.target_speed) < (delta_t * acc))){
-                    new_POSI.speed = cur_POSI.speed;
-                    new_POSI.heading = cur_POSI.heading;
-                }
-                else{ // 尚未达到指引状态
+        if(cs.cmd == 1){ // 接到开车指令
+            if ((Math.abs(js.acc_And_dcc) > 0.02) && (Math.abs(js.angle_offset) > 0.02)){  // 有杆信号
+                temp_acc = js.acc_And_dcc * acc;
+                temp_anglecc = js.angle_offset * angle_velocity;
+                if(cur_POSI.speed + temp_acc * delta_t >= 0){
                     new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
-                    new_POSI.heading = turnCalc(cur_POSI.heading, gs.target_angle, temp_anglecc * delta_t);
                 }
+                else{
+                    new_POSI.speed = 0;
+                }
+                new_POSI.heading = cur_POSI.heading + temp_anglecc * delta_t;
                 new_POSI.height = cur_POSI.height;
                 temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
                 temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
@@ -314,17 +313,36 @@ public class Main {
                 new_POSI.lat = temp_POSI_WGS.lat;
                 new_POSI.longti = temp_POSI_WGS.lon;
             }
-            else{  // 没有指引信号
-                temp_acc = 0;
-                temp_anglecc = 0;
-                new_POSI.speed = cur_POSI.speed;
-                new_POSI.heading = cur_POSI.heading;
-                new_POSI.height = cur_POSI.height;
-                if (cur_POSI.speed == 0){
-                    new_POSI.lat = cur_POSI.lat;
-                    new_POSI.longti = cur_POSI.longti;
-                }
-                else{
+            else{  // 无杆信号
+                if ((gs.target_angle >= 0) && (gs.target_speed >= 0)){ // 有指引信号，先判断是否达到指引状态
+                    temp_acc = acc;
+                    temp_anglecc = angle_velocity;
+                    // 分别判断速度和航向是否达到指引状态
+                    if(Math.abs(cur_POSI.speed - gs.target_speed) < (delta_t * acc)){
+                        new_POSI.speed = gs.target_speed;
+                    }
+                    else{
+                        if(cur_POSI.speed - gs.target_speed > 0){ // 需要减速
+                            if(cur_POSI.speed - temp_acc * delta_t >= 0){
+                                new_POSI.speed = cur_POSI.speed - temp_acc * delta_t;
+                            }
+                            else{
+                                new_POSI.speed = 0;
+                            }
+                        }
+                        else{
+                            new_POSI.speed = cur_POSI.speed + temp_acc * delta_t;
+                        }
+
+                    }
+
+                    if(Math.abs(cur_POSI.heading - gs.target_angle) < (delta_t * angle_velocity)) {
+                        new_POSI.heading = gs.target_angle;
+                    }
+                    else{
+                        new_POSI.heading = turnCalc(cur_POSI.heading, gs.target_angle, temp_anglecc * delta_t);
+                    }
+                    new_POSI.height = cur_POSI.height;
                     temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
                     temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
                     temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
@@ -333,7 +351,46 @@ public class Main {
                     new_POSI.lat = temp_POSI_WGS.lat;
                     new_POSI.longti = temp_POSI_WGS.lon;
                 }
+                else{  // 没有指引信号
+                    temp_acc = 0;
+                    temp_anglecc = 0;
+                    new_POSI.speed = cur_POSI.speed;
+                    new_POSI.heading = cur_POSI.heading;
+                    new_POSI.height = cur_POSI.height;
+                    if (cur_POSI.speed == 0){
+                        new_POSI.lat = cur_POSI.lat;
+                        new_POSI.longti = cur_POSI.longti;
+                    }
+                    else{
+                        temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
+                        temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
+                        temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
+                        temp_new_POSI.z = temp_cur_POSI.z;
+                        temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
+                        new_POSI.lat = temp_POSI_WGS.lat;
+                        new_POSI.longti = temp_POSI_WGS.lon;
+                    }
+                }
             }
+        }
+        else if(cs.cmd == 0){ // 接到刹车指令
+            temp_acc = acc;
+            temp_anglecc = 0;
+            if (cur_POSI.speed > 0){
+                new_POSI.speed = cur_POSI.speed - temp_acc;
+            }
+            else{
+                new_POSI.speed = 0;
+            }
+            new_POSI.heading = cur_POSI.heading;
+            new_POSI.height = cur_POSI.height;
+            temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
+            temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
+            temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
+            temp_new_POSI.z = temp_cur_POSI.z;
+            temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
+            new_POSI.lat = temp_POSI_WGS.lat;
+            new_POSI.longti = temp_POSI_WGS.lon;
         }
         System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
         return new_POSI;
@@ -417,16 +474,56 @@ public class Main {
         }
     }
 
+    static class ReceiveCmdThread implements Runnable{
+        private DatagramSocket socket;
+        Command commandsignal = new Command();
+        @Override
+        public void run() {  // 收到2个int：包头、指令： 0：刹车 1：开车
+            try{
+                socket = new DatagramSocket(receive_cmd_port);
+                while (true){
+                    byte[] buf = new byte[1024];
+                    DatagramPacket recv_msg = new DatagramPacket(buf, buf.length);
+                    socket.receive(recv_msg);
+                    if(recv_msg.getAddress().getHostAddress().equals(receive_cmd_ip)){
+                        byte[] datas = recv_msg.getData();
+                        byte[] temp_data_1 = new byte[4];
+                        System.arraycopy(datas, 0, temp_data_1, 0,4);
+                        int data_1 = byteArrayToInt(temp_data_1);
+                        commandsignal.setPkgHead(data_1);
+                        byte[] temp_data_2 = new byte[4];
+                        System.arraycopy(datas, 4, temp_data_2, 0,4);
+                        int data_2 = byteArrayToInt(temp_data_2);
+                        commandsignal.setCmd(data_2);
+                        System.out.println("Received command signal: " + commandsignal.pkgHead + " " + commandsignal.cmd);
+                    }
+                }
+            } catch (SocketException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }finally {
+                if (socket != null){
+                    socket.close();
+                    System.out.println("Recive command socket close");
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) throws IOException, InterruptedException {
         getProperty();
         ReceiveGuidThread rgt = new ReceiveGuidThread();
         ReceiveJoystickThread rjt = new ReceiveJoystickThread();
+        ReceiveCmdThread rct = new ReceiveCmdThread();
 
         Thread t1 = new Thread(rgt);
         Thread t2 = new Thread(rjt);
+        Thread t3 = new Thread(rct);
 
         t1.start();
         t2.start();
+        t3.start();
 
         // 初始化位置
         APLposition cur_posi = new APLposition();
@@ -441,8 +538,9 @@ public class Main {
         new_posi.height = cur_posi.height;
         new_posi.speed = cur_posi.speed;
         new_posi.heading = cur_posi.heading;
+
         while (true){
-            new_posi = getPOSI(new_posi, rgt.guidsignal, rjt.joysticksignal);
+            new_posi = getPOSI(new_posi, rgt.guidsignal, rjt.joysticksignal, rct.commandsignal);
             Thread.sleep((long) (delta_t * 1000));
 //            System.out.println(new_posi.longti + " " + new_posi.lat + " " +new_posi.height + " " +
 //                    new_posi.speed + " " + new_posi.heading + " ");
