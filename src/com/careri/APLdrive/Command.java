@@ -2,7 +2,7 @@ package com.careri.APLdrive;
 
 public class Command {
     int pkgHead;
-    int cmd;
+    int cmd = -999;
 
     public int getPkgHead() {
         return pkgHead;

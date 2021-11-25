@@ -280,7 +280,7 @@ public class Main {
     public static APLposition getPOSI(APLposition cur_POSI, GuidSignal gs, Joystick js, Command cs){
         /*
         add: 先判断是否收到cmd
-        * 1. 先判断是否收到杆信号，0.02以内认为无信号
+        * 1. 先判断是否收到杆信号，0.05以内认为无信号
         * 2. 根据杆信号，得到当前加速度和转向率,有杆信号就优先按照杆信号运动
         * 3. 根据指引信号，无信号则按当前状态，有信号则先判断当前是否达到指引状态，然后再判断是否进行转向和加减速
         * 4. 计算位置
@@ -294,7 +294,8 @@ public class Main {
         Postion_WGS temp_POSI_WGS = new Postion_WGS();
         APLposition new_POSI = new APLposition();
         if(cs.cmd == 1){ // 接到开车指令
-            if ((Math.abs(js.acc_And_dcc) > 0.02) && (Math.abs(js.angle_offset) > 0.02)){  // 有杆信号
+            System.out.println("start running...");
+            if ((Math.abs(js.acc_And_dcc) > 0.05) && (Math.abs(js.angle_offset) > 0.05)){  // 有杆信号
                 temp_acc = js.acc_And_dcc * acc;
                 temp_anglecc = js.angle_offset * angle_velocity;
                 if(cur_POSI.speed + temp_acc * delta_t >= 0){
@@ -303,7 +304,16 @@ public class Main {
                 else{
                     new_POSI.speed = 0;
                 }
-                new_POSI.heading = cur_POSI.heading + temp_anglecc * delta_t;
+
+                if(cur_POSI.heading + temp_anglecc * delta_t < 0){
+                    new_POSI.heading = 360;
+                }
+                else if(cur_POSI.heading + temp_anglecc * delta_t > 360){
+                    new_POSI.heading = 0;
+                }
+                else{
+                    new_POSI.heading = cur_POSI.heading + temp_anglecc * delta_t;
+                }
                 new_POSI.height = cur_POSI.height;
                 temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
                 temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
@@ -374,14 +384,16 @@ public class Main {
             }
         }
         else if(cs.cmd == 0){ // 接到刹车指令
+            System.out.println("stop running...");
             temp_acc = acc;
             temp_anglecc = 0;
-            if (cur_POSI.speed > 0){
-                new_POSI.speed = cur_POSI.speed - temp_acc;
-            }
-            else{
-                new_POSI.speed = 0;
-            }
+//            if (cur_POSI.speed > 0){
+//                new_POSI.speed = cur_POSI.speed - temp_acc * delta_t;
+//            }
+//            else{
+//                new_POSI.speed = 0;
+//            }
+            new_POSI.speed = 0;
             new_POSI.heading = cur_POSI.heading;
             new_POSI.height = cur_POSI.height;
             temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
@@ -391,6 +403,10 @@ public class Main {
             temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
             new_POSI.lat = temp_POSI_WGS.lat;
             new_POSI.longti = temp_POSI_WGS.lon;
+        }
+        else{
+            new_POSI = cur_POSI;
+            System.out.println("No signal Received");
         }
         System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
         return new_POSI;
