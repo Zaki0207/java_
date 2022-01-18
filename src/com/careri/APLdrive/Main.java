@@ -1,10 +1,7 @@
 package com.careri.APLdrive;
 
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.util.Properties;
 
 public class Main {
@@ -13,8 +10,10 @@ public class Main {
     private static Double acc;
     private static String target_ip;
     private static int target_port;
+    private static String send_state_ip;
+    private static int send_state_port;
     private static String receive_guide_ip;
-    private static int receive_guide_port ;
+    private static int receive_guide_port;
     private static Double initial_longti;
     private static Double initial_lat;
     private static Double initial_height;
@@ -40,6 +39,8 @@ public class Main {
         target_ip = prop.getProperty("target_ip");
         receive_guide_ip = prop.getProperty("receive_guide_ip");
         target_port = Integer.parseInt(prop.getProperty("target_port"));
+        send_state_ip  = prop.getProperty("send_state_ip");
+        send_state_port  = Integer.parseInt(prop.getProperty("send_state_port"));
         receive_guide_port  = Integer.parseInt(prop.getProperty("receive_guide_port"));
         initial_longti = Double.valueOf(prop.getProperty("initial_longti"));
         initial_lat = Double.valueOf(prop.getProperty("initial_lat"));
@@ -276,6 +277,36 @@ public class Main {
         return cur_heading;
     }
 
+    public static void sendInfo(int DEST_PORT, String DEST_IP, int state){   // 1：杆控  2: 指引控  3: 无信号
+        DatagramPacket outPacket = null;
+        try{
+            DatagramSocket socket = new DatagramSocket();
+            outPacket = new DatagramPacket(new byte[0], 0, InetAddress.getByName(DEST_IP), DEST_PORT);
+            byte[] DataType_1 = toLH(888);
+            byte[] DataType_2 = toLH(state);
+            byte[] t= new byte[16];
+            System.arraycopy(DataType_1, 0, t, 0, DataType_1.length);
+            System.arraycopy(DataType_2, 0, t, DataType_1.length, DataType_2.length);
+            outPacket.setData(t);
+            socket.send(outPacket);
+            socket.close();
+            System.out.println("send: ------" + state);
+        } catch (SocketException | UnknownHostException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static byte[] toLH(int n) {
+        byte[] b = new byte[4];
+        b[0] = (byte) (n & 0xff);
+        b[1] = (byte) (n >> 8 & 0xff);
+        b[2] = (byte) (n >> 16 & 0xff);
+        b[3] = (byte) (n >> 24 & 0xff);
+        return b;
+    }
+
 
     public static APLposition getPOSI(APLposition cur_POSI, GuidSignal gs, Joystick js, Command cs){
         /*
@@ -295,7 +326,8 @@ public class Main {
         APLposition new_POSI = new APLposition();
         if(cs.cmd == 1){ // 接到开车指令
             System.out.println("start running...");
-            if ((Math.abs(js.acc_And_dcc) > 0.05) && (Math.abs(js.angle_offset) > 0.05)){  // 有杆信号
+            if ((Math.abs(js.acc_And_dcc) > 0.05) && (Math.abs(js.angle_offset) > 0.05)){  // 有杆信号 1
+                sendInfo(send_state_port, send_state_ip, 1);
                 temp_acc = js.acc_And_dcc * acc;
                 temp_anglecc = js.angle_offset * angle_velocity;
                 if(cur_POSI.speed + temp_acc * delta_t >= 0){
@@ -325,6 +357,7 @@ public class Main {
             }
             else{  // 无杆信号
                 if ((gs.target_angle >= 0) && (gs.target_speed >= 0)){ // 有指引信号，先判断是否达到指引状态
+                    sendInfo(send_state_port, send_state_ip, 2);
                     temp_acc = acc;
                     temp_anglecc = angle_velocity;
                     // 分别判断速度和航向是否达到指引状态
@@ -362,24 +395,28 @@ public class Main {
                     new_POSI.longti = temp_POSI_WGS.lon;
                 }
                 else{  // 没有指引信号
+                    sendInfo(send_state_port, send_state_ip, 3);
                     temp_acc = 0;
                     temp_anglecc = 0;
-                    new_POSI.speed = cur_POSI.speed;
+                    new_POSI.speed = 0;
                     new_POSI.heading = cur_POSI.heading;
                     new_POSI.height = cur_POSI.height;
-                    if (cur_POSI.speed == 0){
-                        new_POSI.lat = cur_POSI.lat;
-                        new_POSI.longti = cur_POSI.longti;
-                    }
-                    else{
-                        temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-                        temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
-                        temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
-                        temp_new_POSI.z = temp_cur_POSI.z;
-                        temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
-                        new_POSI.lat = temp_POSI_WGS.lat;
-                        new_POSI.longti = temp_POSI_WGS.lon;
-                    }
+                    new_POSI.lat = cur_POSI.lat;
+                    new_POSI.longti = cur_POSI.longti;
+
+//                    if (cur_POSI.speed == 0){
+//                        new_POSI.lat = cur_POSI.lat;
+//                        new_POSI.longti = cur_POSI.longti;
+//                    }
+//                    else{
+//                        temp_cur_POSI = WGS_to_ENU(cur_POSI.longti, cur_POSI.lat, cur_POSI.height, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
+//                        temp_new_POSI.x = temp_cur_POSI.x + cur_POSI.speed * delta_t * Math.sin(cur_POSI.heading * 0.0174);
+//                        temp_new_POSI.y = temp_cur_POSI.y + cur_POSI.speed * delta_t * Math.cos(cur_POSI.heading * 0.0174);
+//                        temp_new_POSI.z = temp_cur_POSI.z;
+//                        temp_POSI_WGS = ENU_to_WGS(temp_new_POSI.x, temp_new_POSI.y, temp_new_POSI.z, Ownpoint_lon, Ownpoint_lat, Ownpoint_h);
+//                        new_POSI.lat = temp_POSI_WGS.lat;
+//                        new_POSI.longti = temp_POSI_WGS.lon;
+//                    }
                 }
             }
         }
@@ -406,7 +443,8 @@ public class Main {
         }
         else{
             new_POSI = cur_POSI;
-            System.out.println("No signal Received");
+//            System.out.println("No signal Received");
+            sendInfo(send_state_port, send_state_ip, 3);
         }
         System.out.println("acc:" + temp_acc + "; tcc:" + temp_anglecc);
         return new_POSI;
@@ -445,7 +483,7 @@ public class Main {
             }finally {
                 if (socket != null){
                     socket.close();
-                    System.out.println("Recive Guid socket close");
+                    System.out.println("Recive IM traffic close...");
                 }
             }
         }
